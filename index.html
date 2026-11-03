@@ -742,6 +742,32 @@
       "1859d9ed-b7f6-4e03-a1b6-decbc50c0112": "family2",
       "00d1756b-ce1f-4162-b356-464d26aefaad": "family3"
     };
+    
+    // ▼ここから追加
+    async function loadFamilyDisplayNames() {
+      const { data, error } = await supabaseClient
+        .from("family_members")
+        .select("id, display_name, role, color");
+
+      if (error) {
+        console.error("家族名読み込みエラー:", error);
+        return;
+      }
+
+      (data || []).forEach(member => {
+        const key = AUTH_USER_KEYS[member.id];
+        if (!key || !USERS[key]) return;
+
+        USERS[key] = {
+          ...USERS[key],
+          name: member.display_name || USERS[key].name,
+          color: member.color || USERS[key].color,
+          role: member.role || USERS[key].role
+        };
+      });
+    }
+// ▲ここまで追加
+
 
     async function applySupabaseUser(authUser) {
       const { data, error } = await supabaseClient
