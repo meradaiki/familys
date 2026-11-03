@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>家族共有カレンダー</title>
+  <style>
+    :root {
+      --blue:#2563eb; --blue-dark:#1d4ed8; --bg:#f3f6fb;
+      --surface:#fff; --text:#1f2937; --muted:#64748b;
+      --line:#e2e8f0; --green:#16a34a; --red:#dc2626;
+      --yellow:#ca8a04; --shadow:0 4px 18px rgba(15,23,42,.06);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);
+      font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
+    button,input,textarea,select{font:inherit}
+    button{cursor:pointer}
+    .app{max-width:1180px;margin:0 auto;padding:18px}
+    .hero{background:linear-gradient(135deg,#2563eb,#1e40af);color:white;
+      border-radius:16px;padding:22px 24px;box-shadow:var(--shadow);
+      display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+    .hero h1{margin:0;font-size:clamp(1.35rem,3vw,1.8rem)}
+    .hero p{margin:4px 0 0;color:#dbeafe;font-size:.92rem}
+    .header-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+      box-shadow:var(--shadow);margin-top:16px;overflow:hidden}
+    .panel-head{display:flex;align-items:center;justify-content:space-between;
+      gap:12px;padding:15px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+    .panel-head h2{margin:0;font-size:1.08rem}
+    .month-controls{display:flex;align-items:center;gap:10px}
+    .month-label{min-width:145px;text-align:center;font-weight:750;font-size:1.1rem}
+    .btn{border:1px solid #cbd5e1;border-radius:9px;background:white;color:#334155;
+      padding:8px 12px;font-weight:600}
+    .btn:hover{background:#f8fafc}
+    .btn-primary{background:var(--blue);color:white;border-color:var(--blue)}
+    .btn-primary:hover{background:var(--blue-dark)}
+    .btn-danger{color:#b91c1c;border-color:#fecaca;background:#fff}
+    .btn-small{padding:4px 8px;font-size:.82rem}
+    .statusbar{display:flex;align-items:center;justify-content:space-between;gap:10px;
+      flex-wrap:wrap;padding:10px 18px;background:#f8fafc;color:var(--muted);font-size:.88rem}
+    .demo-note{color:#92400e;background:#fffbeb;border:1px solid #fde68a;
+      padding:10px 14px;border-radius:10px;margin-top:14px;font-size:.88rem}
+    .calendar-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;table-layout:fixed}
+    th,td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);
+      padding:10px;vertical-align:top}
+    th:last-child,td:last-child{border-right:0}
+    th{background:#f8fafc;color:#475569;font-size:.84rem;text-align:left}
+    .date-col{width:76px}.weekday-col{width:52px}
+    .date-cell{font-weight:750;white-space:nowrap}
+    .weekday{font-weight:700}.sun{color:#dc2626}.sat{color:#2563eb}
+    tr.today{background:#eff6ff}
+    tr.today .date-cell::after{content:"今日";display:block;width:fit-content;margin-top:3px;
+      font-size:.68rem;color:#1d4ed8;background:#dbeafe;border-radius:4px;padding:1px 5px}
+    .day-content{min-height:42px}
+    .entry{border-left:4px solid var(--entry-color,#94a3b8);
+      background:var(--entry-bg,#f8fafc);border-radius:6px;padding:6px 8px;
+      margin:0 0 6px;font-size:.88rem;overflow-wrap:anywhere}
+    .entry:last-child{margin-bottom:0}
+    .entry-title{font-weight:700}
+    .entry-meta{font-size:.75rem;color:#64748b;margin-top:2px}
+    .entry-actions{display:flex;gap:5px;margin-top:5px}
+    .empty{color:#94a3b8;font-size:.82rem}
+    .board-list{padding:14px 18px;display:grid;gap:10px}
+    .board-post{border:1px solid var(--line);border-radius:10px;padding:12px}
+    .board-post-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    .author{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:.88rem}
+    .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+    .post-date{color:var(--muted);font-size:.78rem}
+    .post-body{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0 0}
+    .board-form{padding:0 18px 18px;display:grid;gap:9px}
+    .field{display:grid;gap:5px}
+    .field label{font-size:.86rem;font-weight:700;color:#475569}
+    input,textarea,select{width:100%;border:1px solid #cbd5e1;border-radius:8px;
+      padding:9px 10px;background:white;color:var(--text)}
+    textarea{min-height:88px;resize:vertical}
+    .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .legend{display:flex;gap:12px;flex-wrap:wrap;padding:12px 18px;border-top:1px solid var(--line)}
+    .legend-item{display:flex;align-items:center;gap:6px;font-size:.82rem;color:#475569}
+    .footer{color:#94a3b8;font-size:.78rem;text-align:center;padding:18px 0 8px}
+    dialog{border:0;border-radius:14px;padding:0;width:min(540px,calc(100% - 24px));
+      box-shadow:0 20px 60px rgba(15,23,42,.25)}
+    dialog::backdrop{background:rgba(15,23,42,.45)}
+    .modal-head{padding:16px 18px;border-bottom:1px solid var(--line);
+      display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .modal-head h3{margin:0}
+    .modal-body{padding:18px;display:grid;gap:12px}
+    .modal-actions{display:flex;justify-content:flex-end;gap:8px;padding-top:4px}
+    .hidden{display:none!important}
+    .entry-screen{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#eff6ff,#dbeafe);
+      display:flex;align-items:center;justify-content:center;padding:18px}
+    .entry-card{width:min(440px,100%);background:white;border:1px solid #dbeafe;
+      border-radius:18px;padding:26px;box-shadow:0 18px 50px rgba(30,64,175,.15)}
+    .entry-card h1{margin:0 0 6px;font-size:1.5rem;color:#1e40af}
+    .entry-card p{margin:0 0 18px;color:#64748b;font-size:.92rem}
+    .entry-card form{display:grid;gap:13px}
+    .entry-error{color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;
+      padding:9px 11px;border-radius:8px;font-size:.88rem}
+    .entry-demo{margin-top:14px;background:#fffbeb;border:1px solid #fde68a;
+      color:#92400e;border-radius:9px;padding:10px;font-size:.82rem}
+    @media(max-width:720px){
+      .app{padding:10px}.hero{padding:18px;border-radius:12px}
+      .panel-head{padding:12px}.month-label{min-width:125px;font-size:1rem}
+      th,td{padding:7px 6px}.date-col{width:58px}.weekday-col{width:34px}
+      th{font-size:.75rem}.entry{font-size:.82rem;padding:5px 6px}
+      .entry-meta{font-size:.7rem}.form-grid{grid-template-columns:1fr}
+    }
+    @media(max-width:520px){
+      .calendar-wrap table{min-width:640px}.mobile-hint{display:block}
+      .header-actions .btn{padding:7px 9px;font-size:.85rem}
+    }
+    .mobile-hint{display:none;color:var(--muted);font-size:.78rem;padding:8px 12px 0}
+  </style>
+</head>
+<body>
+
+  <!-- 入室チェック画面 -->
+  <section class="entry-screen" id="entryScreen">
+    <div class="entry-card">
+      <h1>家族共有カレンダー</h1>
+      <p>入室IDとパスワードを入力してください。</p>
+      <form id="entryForm">
+        <div class="field">
+          <label for="entryIdInput">入室ID</label>
+          <input id="entryIdInput" autocomplete="username" required>
+        </div>
+        <div class="field">
+          <label for="entryPasswordInput">パスワード</label>
+          <input id="entryPasswordInput" type="password" autocomplete="current-password" required>
+        </div>
+        <div id="entryError" class="entry-error hidden">入室IDまたはパスワードが違います。</div>
+        <button class="btn btn-primary" type="submit">入室する</button>
+      </form>
+      <div class="entry-demo">
+        <strong>試作版の確認用</strong><br>
+        入室ID：family<br>
+        パスワード：1234
+      </div>
+    </div>
+  </section>
+
+  <main class="app hidden" id="mainApp">
+    <header class="hero">
+      <div>
+        <h1>家族共有カレンダー</h1>
+        <p>家族の予定・連絡事項をひとつに</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn hidden" id="adminSettingsBtn">管理者設定</button>
+        <button class="btn" id="loginBtn">ログイン</button>
+        <button class="btn" id="exitSiteBtn">サイト退出</button>
+        <button class="btn btn-primary" id="addEventBtn">＋ 予定・連絡を追加</button>
+      </div>
+    </header>
+
+    <div class="demo-note">
+      <strong>共有版（予定機能）：</strong>ログイン後の予定・連絡事項はSupabaseに保存され、家族間で共有されます。
+      入室チェックはブラウザ側の仮機能であり、本番用のセキュリティではありません。
+    </div>
+
+    <section class="panel" aria-labelledby="calendarHeading">
+      <div class="panel-head">
+        <h2 id="calendarHeading">月間予定</h2>
+        <div class="month-controls">
+          <button class="btn" id="prevMonth" aria-label="前月">‹ 前月</button>
+          <div class="month-label" id="monthLabel"></div>
+          <button class="btn" id="nextMonth" aria-label="次月">次月 ›</button>
+          <button class="btn" id="todayBtn">今月</button>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span id="userStatus">状態：未ログイン（閲覧モード）</span>
+        <span>予定・連絡はログイン後に編集できます</span>
+      </div>
+      <div class="mobile-hint">スマホでは表を左右にスクロールできます。</div>
+      <div class="calendar-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="date-col">日付</th>
+              <th class="weekday-col">曜</th>
+              <th>予定</th>
+              <th>連絡事項</th>
+            </tr>
+          </thead>
+          <tbody id="calendarBody"></tbody>
+        </table>
+      </div>
+      <div class="legend" id="legend"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="boardHeading">
+      <div class="panel-head">
+        <h2 id="boardHeading">家族掲示板</h2>
+        <span class="post-date">伝言・お知らせ</span>
+      </div>
+      <div class="board-list" id="boardList"></div>
+      <form class="board-form" id="boardForm">
+        <div class="field">
+          <label for="boardName">投稿者名（未ログイン時）</label>
+          <input id="boardName" maxlength="30" placeholder="例：家族" required>
+        </div>
+        <div class="field">
+          <label for="boardText">投稿内容</label>
+          <textarea id="boardText" maxlength="1500" placeholder="家族への伝言を入力..." required></textarea>
+        </div>
+        <div class="field" id="boardPassField">
+          <label for="boardPass">編集・削除用パスワード（未ログイン投稿用）</label>
+          <input id="boardPass" type="password" minlength="4" maxlength="80"
+            placeholder="投稿の編集・削除に使用します">
+        </div>
+        <div><button class="btn btn-primary" type="submit">掲示板に投稿</button></div>
+      </form>
+    </section>
+
+    <div class="footer">家族共有カレンダー — 試作画面</div>
+  </main>
+
+  <!-- 予定編集ダイアログ -->
+  <dialog id="eventDialog">
+    <form id="eventForm">
+      <div class="modal-head">
+        <h3 id="eventDialogTitle">予定・連絡事項を追加</h3>
+        <button class="btn btn-small" type="button" id="closeEventDialog">閉じる</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="eventDate">日付</label>
+          <input type="date" id="eventDate" required>
+        </div>
+        <div class="field">
+          <label for="eventType">種類</label>
+          <select id="eventType">
+            <option value="event">予定</option>
+            <option value="notice">連絡事項</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="eventTitle">タイトル</label>
+          <input id="eventTitle" maxlength="100" required placeholder="例：買い物、通院、持ち物">
+        </div>
+        <div class="field">
+          <label for="eventDetails">詳細（任意）</label>
+          <textarea id="eventDetails" maxlength="1500" placeholder="時間や補足など"></textarea>
+        </div>
+        <div class="field">
+          <label for="eventTime">時間（任意）</label>
+          <input id="eventTime" type="time">
+        </div>
+        <div class="modal-actions">
+          <button class="btn" type="button" id="cancelEvent">キャンセル</button>
+          <button class="btn btn-primary" type="submit">保存</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Supabaseログイン -->
+  <dialog id="loginDialog">
+    <form id="loginForm">
+      <div class="modal-head">
+        <h3>家族アカウントでログイン</h3>
+        <button class="btn btn-small" type="button" id="closeLoginDialog">閉じる</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="loginEmail">ログイン用メールアドレス</label>
+          <input id="loginEmail" type="email" autocomplete="username" required placeholder="Supabaseで登録したメールアドレス">
+        </div>
+        <div class="field">
+          <label for="loginPassword">パスワード</label>
+          <input id="loginPassword" type="password" autocomplete="current-password" required>
+        </div>
+        <div id="loginError" class="entry-error hidden"></div>
+        <div class="modal-actions">
+          <button class="btn" type="button" id="cancelLogin">キャンセル</button>
+          <button class="btn btn-primary" type="submit" id="submitLogin">ログイン</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 管理者専用：入室ID変更 -->
+  <dialog id="adminSettingsDialog">
+    <form id="adminSettingsForm">
+      <div class="modal-head">
+        <h3>管理者設定</h3>
+        <button class="btn btn-small" type="button" id="closeAdminSettings">閉じる</button>
+      </div>
+      <div class="modal-body">
+        <div class="demo-note" style="margin:0">
+          管理者用の試作設定です。ここで変更したIDは、このブラウザ内に保存されます。
+        </div>
+        <div class="field">
+          <label for="currentEntryId">現在の入室ID</label>
+          <input id="currentEntryId" readonly>
+        </div>
+        <div class="field">
+          <label for="newEntryId">新しい入室ID</label>
+          <input id="newEntryId" maxlength="80" required placeholder="新しい入室ID">
+        </div>
+        <div class="modal-actions">
+          <button class="btn" type="button" id="cancelAdminSettings">キャンセル</button>
+          <button class="btn btn-primary" type="submit">変更を保存</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 掲示板編集 -->
+  <dialog id="boardEditDialog">
+    <form id="boardEditForm">
+      <div class="modal-head">
+        <h3>掲示板の編集</h3>
+        <button class="btn btn-small" type="button" id="closeBoardEdit">閉じる</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="editBoardText">投稿内容</label>
+          <textarea id="editBoardText" maxlength="1500" required></textarea>
+        </div>
+        <div class="field" id="editBoardPassField">
+          <label for="editBoardPass">編集用パスワード</label>
+          <input id="editBoardPass" type="password">
+        </div>
+        <div class="modal-actions">
+          <button class="btn" type="button" id="cancelBoardEdit">キャンセル</button>
+          <button class="btn btn-primary" type="submit">更新</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script>
+    // 試作用ユーザー。Supabase連携時に本物の認証へ置き換えます。
+
+    const SUPABASE_URL = "https://zcrlljohwsqjchroaazn.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_rr3m6dkxagIISnlC258DvQ_x-rLjVX0";
+
+    const supabaseClient = window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_KEY
+    );
+
+    const USERS = {
+      admin:   { name:"管理者", color:"#16a34a", bg:"#dcfce7", role:"admin" },
+      family1: { name:"家族1", color:"#2563eb", bg:"#dbeafe", role:"family" },
+      family2: { name:"家族2", color:"#dc2626", bg:"#fee2e2", role:"family" },
+      family3: { name:"家族3", color:"#ca8a04", bg:"#fef9c3", role:"family" }
+    };
+
+    const STORAGE_KEY = "familyCalendarPrototype_v1";
+    const BOARD_KEY = "familyBoardPrototype_v1";
+    const ENTRY_CONFIG_KEY = "familyCalendarEntryConfig_v1";
+    const ENTRY_SESSION_KEY = "familyCalendarEntrySession_v1";
+
+    // 試作用の初期入室情報
+    const DEFAULT_ENTRY_ID = "family";
+    const DEFAULT_ENTRY_PASSWORD = "1234";
+
+    let currentUser = null;
+    let currentAuthUserId = null;
+    let sharedEvents = [];
+    let viewDate = new Date();
+    viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+    let editingEventId = null;
+    let editingBoardId = null;
+
+    const $ = (id) => document.getElementById(id);
+
+    const localDateKey = (date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    };
+
+    const readStore = (key) => {
+      try {
+        const value = JSON.parse(localStorage.getItem(key) || "[]");
+        return Array.isArray(value) ? value : [];
+      } catch {
+        return [];
+      }
+    };
+
+    const writeStore = (key, data) =>
+      localStorage.setItem(key, JSON.stringify(data));
+
+    const escapeHtml = (value) =>
+      String(value ?? "").replace(/[&<>"']/g, c => ({
+        "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+      }[c]));
+
+    const currentUserInfo = () => currentUser ? USERS[currentUser] : null;
+    const canManageCalendar = () => !!currentUser;
+
+    function getEntryConfig() {
+      try {
+        const config = JSON.parse(localStorage.getItem(ENTRY_CONFIG_KEY) || "{}");
+        return {
+          id: typeof config.id === "string" && config.id ? config.id : DEFAULT_ENTRY_ID
+        };
+      } catch {
+        return { id: DEFAULT_ENTRY_ID };
+      }
+    }
+
+    function saveEntryConfig(config) {
+      localStorage.setItem(ENTRY_CONFIG_KEY, JSON.stringify(config));
+    }
+
+    function showEntryScreen() {
+      $("entryScreen").classList.remove("hidden");
+      $("mainApp").classList.add("hidden");
+      $("entryIdInput").value = "";
+      $("entryPasswordInput").value = "";
+      $("entryError").classList.add("hidden");
+    }
+
+    function enterSite() {
+      $("entryScreen").classList.add("hidden");
+      $("mainApp").classList.remove("hidden");
+      renderCalendar();
+      renderBoard();
+    }
+
+    // 入室状態は同じタブのセッション中だけ保持
+    $("entryForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const config = getEntryConfig();
+      const enteredId = $("entryIdInput").value.trim();
+      const enteredPassword = $("entryPasswordInput").value;
+
+      if (enteredId === config.id && enteredPassword === DEFAULT_ENTRY_PASSWORD) {
+        sessionStorage.setItem(ENTRY_SESSION_KEY, "entered");
+        $("entryError").classList.add("hidden");
+        enterSite();
+      } else {
+        $("entryError").classList.remove("hidden");
+        $("entryPasswordInput").value = "";
+      }
+    });
+
+    $("exitSiteBtn").addEventListener("click", () => {
+      if (!confirm("サイトから退出して入室画面に戻りますか？")) return;
+      sessionStorage.removeItem(ENTRY_SESSION_KEY);
+      currentUser = null;
+      currentAuthUserId = null;
+      sharedEvents = [];
+      updateUserUI();
+      showEntryScreen();
+    });
+
+    function renderLegend() {
+      $("legend").innerHTML = Object.values(USERS).map(u =>
+        `<span class="legend-item"><span class="dot" style="background:${u.color}"></span>${escapeHtml(u.name)}</span>`
+      ).join("");
+    }
+
+    function renderCalendar() {
+      const year = viewDate.getFullYear();
+      const month = viewDate.getMonth();
+      $("monthLabel").textContent = `${year}年${month + 1}月`;
+
+      const days = new Date(year, month + 1, 0).getDate();
+      const today = localDateKey(new Date());
+      const events = sharedEvents;
+      const tbody = $("calendarBody");
+      tbody.innerHTML = "";
+
+      for (let day = 1; day <= days; day++) {
+        const date = new Date(year, month, day);
+        const key = localDateKey(date);
+        const dow = date.getDay();
+        const row = document.createElement("tr");
+        if (key === today) row.classList.add("today");
+
+        const weekdayClass = dow === 0 ? "sun" : dow === 6 ? "sat" : "";
+        const dayEvents = events.filter(e => e.date === key);
+        const schedule = dayEvents.filter(e => e.type === "event");
+        const notices = dayEvents.filter(e => e.type === "notice");
+
+        row.innerHTML = `
+          <td class="date-cell">${month + 1}/${day}</td>
+          <td class="weekday ${weekdayClass}">${["日","月","火","水","木","金","土"][dow]}</td>
+          <td><div class="day-content">${renderEntries(schedule)}</div></td>
+          <td><div class="day-content">${renderEntries(notices)}</div></td>`;
+        tbody.appendChild(row);
+      }
+    }
+
+    function renderEntries(entries) {
+      if (!entries.length) return `<span class="empty">—</span>`;
+
+      return entries.map(e => {
+        const user = USERS[e.userId] || {
+          name:e.author || "家族", color:"#64748b", bg:"#f1f5f9"
+        };
+        const canEdit = canManageCalendar();
+        const details = e.details
+          ? `<div>${escapeHtml(e.details).replace(/\n/g, "<br>")}</div>` : "";
+        const time = e.time ? `${escapeHtml(e.time)} ` : "";
+
+        return `<div class="entry" style="--entry-color:${user.color};--entry-bg:${user.bg}">
+          <div class="entry-title">${time}${escapeHtml(e.title)}</div>
+          ${details}
+          <div class="entry-meta">${escapeHtml(user.name)}</div>
+          ${canEdit ? `<div class="entry-actions">
+            <button class="btn btn-small" onclick="editEvent('${e.id}')">編集</button>
+            <button class="btn btn-small btn-danger" onclick="deleteEvent('${e.id}')">削除</button>
+          </div>` : ""}
+        </div>`;
+      }).join("");
+    }
+
+    // 掲示板：管理者は全投稿、家族は自分のログイン投稿を管理。
+    // 未ログイン投稿はパスワード照合を編集・削除時に行います。
+    function canManageBoard(post) {
+      if (currentUser === "admin") return true;
+      if (post.userId) return post.userId === currentUser;
+      return !currentUser;
+    }
+
+    function renderBoard() {
+      const posts = readStore(BOARD_KEY).sort((a,b) => b.createdAt - a.createdAt);
+      const list = $("boardList");
+
+      if (!posts.length) {
+        list.innerHTML = `<div class="empty">まだ投稿はありません。</div>`;
+        return;
+      }
+
+      list.innerHTML = posts.map(post => {
+        const user = post.userId ? USERS[post.userId] : {
+          name:post.author || "家族", color:"#64748b"
+        };
+        const editable = canManageBoard(post);
+
+        return `<article class="board-post">
+          <div class="board-post-head">
+            <span class="author"><span class="dot" style="background:${user.color}"></span>${escapeHtml(user.name)}</span>
+            <span class="post-date">${new Date(post.createdAt).toLocaleString("ja-JP")}</span>
+          </div>
+          <p class="post-body">${escapeHtml(post.text)}</p>
+          ${editable ? `<div class="entry-actions">
+            <button class="btn btn-small" onclick="openBoardEdit('${post.id}')">編集</button>
+            <button class="btn btn-small btn-danger" onclick="deleteBoardPost('${post.id}')">削除</button>
+          </div>` : ""}
+        </article>`;
+      }).join("");
+    }
+
+    function updateUserUI() {
+      const user = currentUserInfo();
+
+      $("userStatus").textContent = user
+        ? `ログイン中：${user.name}（${user.role === "admin" ? "管理者" : "家族アカウント"}）`
+        : "状態：未ログイン（閲覧モード）";
+
+      $("loginBtn").textContent = user ? "ログアウト" : "ログイン";
+      $("adminSettingsBtn").classList.toggle("hidden", currentUser !== "admin");
+      $("addEventBtn").disabled = !user;
+      $("addEventBtn").title = user ? "" : "予定・連絡事項の追加にはログインが必要です";
+
+      $("boardName").disabled = !!user;
+      $("boardName").placeholder = user ? `${user.name}として投稿` : "例：家族";
+      $("boardPassField").classList.toggle("hidden", !!user);
+
+      renderCalendar();
+      renderBoard();
+    }
+
+    function openEventDialog(date = localDateKey(new Date()), event = null) {
+      if (!canManageCalendar()) {
+        alert("予定・連絡事項の追加・編集にはログインが必要です。");
+        return;
+      }
+
+      editingEventId = event?.id ?? null;
+      $("eventDialogTitle").textContent = event
+        ? "予定・連絡事項を編集" : "予定・連絡事項を追加";
+      $("eventDate").value = event?.date || date;
+      $("eventType").value = event?.type || "event";
+      $("eventTitle").value = event?.title || "";
+      $("eventDetails").value = event?.details || "";
+      $("eventTime").value = event?.time || "";
+      $("eventDialog").showModal();
+    }
+
+    // Supabase calendar_events の行を画面用データに変換
+    function eventFromRow(row) {
+      const userId = Object.keys(AUTH_USER_KEYS).find(uid => uid === row.member_id || uid === row.created_by);
+      const userKey = userId ? AUTH_USER_KEYS[userId] : null;
+      return {
+        id: row.id,
+        date: row.event_date,
+        type: row.type || "event",
+        title: row.title || "",
+        details: row.description || "",
+        time: row.start_time || "",
+        userId: userKey,
+        memberId: row.member_id || null,
+        createdBy: row.created_by || null,
+        author: userKey ? USERS[userKey].name : "家族",
+        createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+        updatedAt: row.updated_at ? new Date(row.updated_at).getTime() : Date.now()
+      };
+    }
+
+    async function loadSharedEvents() {
+      if (!currentUser) {
+        sharedEvents = [];
+        renderCalendar();
+        return;
+      }
+      const { data, error } = await supabaseClient
+        .from("calendar_events")
+        .select("id, title, description, event_date, start_time, type, member_id, created_by, created_at, updated_at")
+        .order("event_date", { ascending: true })
+        .order("start_time", { ascending: true });
+      if (error) {
+        console.error("予定の読み込みエラー:", error);
+        alert("予定の読み込みに失敗しました。Supabaseのcalendar_eventsの列名・権限を確認してください。\n" + error.message);
+        return;
+      }
+      sharedEvents = (data || []).map(eventFromRow);
+      renderCalendar();
+    }
+
+    function editEvent(id) {
+      const event = sharedEvents.find(e => String(e.id) === String(id));
+      if (event) openEventDialog(event.date, event);
+    }
+
+    async function deleteEvent(id) {
+      if (!canManageCalendar()) return;
+      if (!confirm("この予定・連絡事項を削除しますか？")) return;
+      const { error } = await supabaseClient.from("calendar_events").delete().eq("id", id);
+      if (error) {
+        alert("削除に失敗しました：" + error.message);
+        return;
+      }
+      sharedEvents = sharedEvents.filter(e => String(e.id) !== String(id));
+      renderCalendar();
+    }
+
+    $("eventForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!canManageCalendar() || !currentAuthUserId) return;
+
+      const existing = sharedEvents.find(item => String(item.id) === String(editingEventId));
+      const title = $("eventTitle").value.trim();
+      const date = $("eventDate").value;
+      if (!title || !date) return;
+
+      const record = {
+        title,
+        description: $("eventDetails").value.trim(),
+        event_date: date,
+        start_time: $("eventTime").value || null,
+        type: $("eventType").value,
+        member_id: existing?.memberId || currentAuthUserId,
+        created_by: existing?.createdBy || currentAuthUserId,
+        updated_at: new Date().toISOString()
+      };
+
+      let result;
+      if (editingEventId) {
+        result = await supabaseClient.from("calendar_events").update(record).eq("id", editingEventId).select("id, title, description, event_date, start_time, type, member_id, created_by, created_at, updated_at").single();
+      } else {
+        result = await supabaseClient.from("calendar_events").insert({ ...record, created_at: new Date().toISOString() }).select("id, title, description, event_date, start_time, type, member_id, created_by, created_at, updated_at").single();
+      }
+
+      if (result.error) {
+        alert("保存に失敗しました：" + result.error.message + "\nSupabaseのcalendar_eventsの列名・RLS権限を確認してください。");
+        return;
+      }
+
+      const saved = eventFromRow(result.data);
+      const index = sharedEvents.findIndex(item => String(item.id) === String(saved.id));
+      if (index >= 0) sharedEvents[index] = saved;
+      else sharedEvents.push(saved);
+      sharedEvents.sort((a,b) => (a.date || "").localeCompare(b.date || "") || (a.time || "").localeCompare(b.time || ""));
+      $("eventDialog").close();
+      renderCalendar();
+    });
+
+    $("addEventBtn").addEventListener("click", () => openEventDialog());
+    $("closeEventDialog").addEventListener("click", () => $("eventDialog").close());
+    $("cancelEvent").addEventListener("click", () => $("eventDialog").close());
+
+    $("prevMonth").addEventListener("click", () => {
+      viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1);
+      renderCalendar();
+    });
+    $("nextMonth").addEventListener("click", () => {
+      viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1);
+      renderCalendar();
+    });
+    $("todayBtn").addEventListener("click", () => {
+      const n = new Date();
+      viewDate = new Date(n.getFullYear(), n.getMonth(), 1);
+      renderCalendar();
+    });
+
+    // Supabase Auth：登録済みメールアドレスとパスワードでログイン
+    const AUTH_USER_KEYS = {
+      "64bdc5b0-5e4f-4f4e-8e2a-250a9148ff1e": "admin",
+      "25d6c954-6fe8-4550-a451-d6a3645ab4fa": "family1",
+      "1859d9ed-b7f6-4e03-a1b6-decbc50c0112": "family2",
+      "00d1756b-ce1f-4162-b356-464d26aefaad": "family3"
+    };
+
+    async function applySupabaseUser(authUser) {
+      const { data, error } = await supabaseClient
+        .from("family_members")
+        .select("display_name, role, color")
+        .eq("id", authUser.id)
+        .single();
+
+      if (error || !data) {
+        await supabaseClient.auth.signOut();
+        currentUser = null;
+        currentAuthUserId = null;
+        sharedEvents = [];
+        updateUserUI();
+        throw new Error("家族プロフィールが見つかりません。Supabaseのfamily_membersに、このアカウントのUIDが登録されているか確認してください。");
+      }
+
+      const key = AUTH_USER_KEYS[authUser.id];
+      if (!key) {
+        await supabaseClient.auth.signOut();
+        currentUser = null;
+        currentAuthUserId = null;
+        sharedEvents = [];
+        updateUserUI();
+        throw new Error("登録されていない家族アカウントです。");
+      }
+
+      USERS[key] = {
+        name: data.display_name,
+        color: data.color,
+        bg: data.role === "admin" ? "#dcfce7" :
+            key === "family1" ? "#dbeafe" :
+            key === "family2" ? "#fee2e2" : "#fef9c3",
+        role: data.role
+      };
+      currentUser = key;
+      currentAuthUserId = authUser.id;
+      updateUserUI();
+      await loadSharedEvents();
+    }
+
+    $("loginBtn").addEventListener("click", async () => {
+      if (currentUser) {
+        const { error } = await supabaseClient.auth.signOut();
+        if (error) alert("ログアウトに失敗しました：" + error.message);
+        currentUser = null;
+        currentAuthUserId = null;
+        sharedEvents = [];
+        updateUserUI();
+      } else {
+        $("loginEmail").value = "";
+        $("loginPassword").value = "";
+        $("loginError").classList.add("hidden");
+        $("loginDialog").showModal();
+      }
+    });
+
+    $("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const button = $("submitLogin");
+      const errorBox = $("loginError");
+      button.disabled = true;
+      button.textContent = "ログイン中...";
+      errorBox.classList.add("hidden");
+
+      try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+          email: $("loginEmail").value.trim(),
+          password: $("loginPassword").value
+        });
+        if (error) throw error;
+        await applySupabaseUser(data.user);
+        $("loginDialog").close();
+        $("loginPassword").value = "";
+      } catch (error) {
+        errorBox.textContent = error.message || "ログインに失敗しました。入力内容を確認してください。";
+        errorBox.classList.remove("hidden");
+      } finally {
+        button.disabled = false;
+        button.textContent = "ログイン";
+      }
+    });
+
+    async function restoreSupabaseSession() {
+      const { data, error } = await supabaseClient.auth.getSession();
+      if (error || !data.session) return;
+      try {
+        await applySupabaseUser(data.session.user);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    $("closeLoginDialog").addEventListener("click", () => $("loginDialog").close());
+    $("cancelLogin").addEventListener("click", () => $("loginDialog").close());
+
+    // 管理者設定：入室IDのみ変更
+    $("adminSettingsBtn").addEventListener("click", () => {
+      if (currentUser !== "admin") {
+        alert("管理者のみ利用できます。");
+        return;
+      }
+      const config = getEntryConfig();
+      $("currentEntryId").value = config.id;
+      $("newEntryId").value = config.id;
+      $("adminSettingsDialog").showModal();
+    });
+
+    $("adminSettingsForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      if (currentUser !== "admin") {
+        alert("管理者のみ変更できます。");
+        return;
+      }
+
+      const newId = $("newEntryId").value.trim();
+      if (!newId) {
+        alert("新しい入室IDを入力してください。");
+        return;
+      }
+
+      saveEntryConfig({ id:newId });
+      $("adminSettingsDialog").close();
+      alert("入室IDを変更しました。次回入室時から新しいIDを使用してください。");
+    });
+
+    $("closeAdminSettings").addEventListener("click", () => $("adminSettingsDialog").close());
+    $("cancelAdminSettings").addEventListener("click", () => $("adminSettingsDialog").close());
+
+    // 掲示板投稿
+    $("boardForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      const text = $("boardText").value.trim();
+      if (!text) return;
+
+      const user = currentUserInfo();
+      const author = user ? user.name : $("boardName").value.trim();
+      if (!author) {
+        alert("投稿者名を入力してください。");
+        return;
+      }
+
+      let password = null;
+      if (!currentUser) {
+        password = $("boardPass").value;
+        if (password.length < 4) {
+          alert("編集用パスワードを4文字以上で設定してください。");
+          return;
+        }
+      }
+
+      const posts = readStore(BOARD_KEY);
+      posts.push({
+        id:crypto.randomUUID(),
+        text,
+        author,
+        userId:currentUser,
+        password,
+        createdAt:Date.now()
+      });
+
+      writeStore(BOARD_KEY, posts);
+      $("boardText").value = "";
+      $("boardPass").value = "";
+      renderBoard();
+    });
+
+    function openBoardEdit(id) {
+      const post = readStore(BOARD_KEY).find(p => p.id === id);
+      if (!post || !canManageBoard(post)) {
+        alert("この投稿を編集する権限がありません。");
+        return;
+      }
+
+      editingBoardId = id;
+      $("editBoardText").value = post.text;
+      const needsPass = !post.userId && currentUser !== "admin";
+      $("editBoardPassField").classList.toggle("hidden", !needsPass);
+      $("editBoardPass").value = "";
+      $("boardEditDialog").showModal();
+    }
+
+    function deleteBoardPost(id) {
+      const posts = readStore(BOARD_KEY);
+      const post = posts.find(p => p.id === id);
+
+      if (!post || !canManageBoard(post)) {
+        alert("この投稿を削除する権限がありません。");
+        return;
+      }
+
+      if (!post.userId && currentUser !== "admin") {
+        const pass = prompt("投稿時に設定した編集用パスワードを入力してください。");
+        if (pass !== post.password) {
+          alert("パスワードが違います。");
+          return;
+        }
+      }
+
+      if (!confirm("この掲示板投稿を削除しますか？")) return;
+      writeStore(BOARD_KEY, posts.filter(p => p.id !== id));
+      renderBoard();
+    }
+
+    $("boardEditForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      const posts = readStore(BOARD_KEY);
+      const post = posts.find(p => p.id === editingBoardId);
+
+      if (!post || !canManageBoard(post)) {
+        alert("この投稿を編集する権限がありません。");
+        return;
+      }
+
+      if (!post.userId && currentUser !== "admin") {
+        if ($("editBoardPass").value !== post.password) {
+          alert("編集用パスワードが違います。");
+          return;
+        }
+      }
+
+      const newText = $("editBoardText").value.trim();
+      if (!newText) {
+        alert("投稿内容を入力してください。");
+        return;
+      }
+
+      post.text = newText;
+      post.updatedAt = Date.now();
+      writeStore(BOARD_KEY, posts);
+      $("boardEditDialog").close();
+      renderBoard();
+    });
+
+    $("closeBoardEdit").addEventListener("click", () => $("boardEditDialog").close());
+    $("cancelBoardEdit").addEventListener("click", () => $("boardEditDialog").close());
+
+    // インラインボタンから呼び出す関数を公開
+    window.editEvent = editEvent;
+    window.deleteEvent = deleteEvent;
+    window.openBoardEdit = openBoardEdit;
+    window.deleteBoardPost = deleteBoardPost;
+
+    renderLegend();
+    updateUserUI();
+    restoreSupabaseSession();
+
+    // 前回このタブで入室済みなら入室画面を省略
+    if (sessionStorage.getItem(ENTRY_SESSION_KEY) === "entered") {
+      enterSite();
+    } else {
+      showEntryScreen();
+    }
+  </script>
+</body>
+</html>
