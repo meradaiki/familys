@@ -805,6 +805,9 @@
       };
       currentUser = key;
       currentAuthUserId = authUser.id;
+
+      await loadFamilyDisplayNames();
+      
       updateUserUI();
       await loadSharedEvents();
       await loadSharedBoardPosts();
