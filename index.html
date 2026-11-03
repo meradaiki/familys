@@ -364,6 +364,7 @@
     let currentUser = null;
     let currentAuthUserId = null;
     let sharedEvents = [];
+    let sharedBoardPosts = [];
     let viewDate = new Date();
     viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
     let editingEventId = null;
@@ -451,6 +452,7 @@
       currentUser = null;
       currentAuthUserId = null;
       sharedEvents = [];
+      sharedBoardPosts = [];
       updateUserUI();
       showEntryScreen();
     });
@@ -517,35 +519,62 @@
       }).join("");
     }
 
-    // 掲示板：管理者は全投稿、家族は自分のログイン投稿を管理。
-    // 未ログイン投稿はパスワード照合を編集・削除時に行います。
+    // Supabase board_posts の行を画面用データに変換
+    function boardPostFromRow(row) {
+      const userKey = row.author_id ? AUTH_USER_KEYS[row.author_id] : null;
+      return {
+        id: row.id,
+        text: row.content || "",
+        title: row.title || "",
+        author: row.author_name || (userKey ? USERS[userKey].name : "家族"),
+        color: row.author_color || (userKey ? USERS[userKey].color : "#64748b"),
+        userId: userKey,
+        authorId: row.author_id,
+        createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+        updatedAt: row.updated_at ? new Date(row.updated_at).getTime() : Date.now()
+      };
+    }
+
     function canManageBoard(post) {
       if (currentUser === "admin") return true;
-      if (post.userId) return post.userId === currentUser;
-      return !currentUser;
+      return !!currentAuthUserId && post.authorId === currentAuthUserId;
+    }
+
+    async function loadSharedBoardPosts() {
+      if (!currentUser) {
+        sharedBoardPosts = [];
+        renderBoard();
+        return;
+      }
+      const { data, error } = await supabaseClient
+        .from("board_posts")
+        .select("id, author_id, author_name, author_color, title, content, is_anonymous, created_at, updated_at")
+        .order("created_at", { ascending: false });
+      if (error) {
+        console.error("掲示板読み込みエラー:", error);
+        alert("掲示板の読み込みに失敗しました。Supabaseのboard_postsの列名・権限を確認してください。\n" + error.message);
+        return;
+      }
+      sharedBoardPosts = (data || []).map(boardPostFromRow);
+      renderBoard();
     }
 
     function renderBoard() {
-      const posts = readStore(BOARD_KEY).sort((a,b) => b.createdAt - a.createdAt);
+      const posts = [...sharedBoardPosts].sort((a,b) => b.createdAt - a.createdAt);
       const list = $("boardList");
-
       if (!posts.length) {
         list.innerHTML = `<div class="empty">まだ投稿はありません。</div>`;
         return;
       }
-
       list.innerHTML = posts.map(post => {
-        const user = post.userId ? USERS[post.userId] : {
-          name:post.author || "家族", color:"#64748b"
-        };
+        const user = { name: post.author || "家族", color: post.color || "#64748b" };
         const editable = canManageBoard(post);
-
         return `<article class="board-post">
           <div class="board-post-head">
             <span class="author"><span class="dot" style="background:${user.color}"></span>${escapeHtml(user.name)}</span>
             <span class="post-date">${new Date(post.createdAt).toLocaleString("ja-JP")}</span>
           </div>
-          <p class="post-body">${escapeHtml(post.text)}</p>
+          <p class="post-body">${escapeHtml(post.text).replace(/\n/g, "<br>")}</p>
           ${editable ? `<div class="entry-actions">
             <button class="btn btn-small" onclick="openBoardEdit('${post.id}')">編集</button>
             <button class="btn btn-small btn-danger" onclick="deleteBoardPost('${post.id}')">削除</button>
@@ -567,8 +596,12 @@
       $("addEventBtn").title = user ? "" : "予定・連絡事項の追加にはログインが必要です";
 
       $("boardName").disabled = !!user;
-      $("boardName").placeholder = user ? `${user.name}として投稿` : "例：家族";
-      $("boardPassField").classList.toggle("hidden", !!user);
+      $("boardName").placeholder = user ? `${user.name}として投稿` : "ログインしてください";
+      $("boardName").required = false;
+      $("boardName").classList.toggle("hidden", !!user);
+      $("boardPassField").classList.add("hidden");
+      $("boardForm").querySelector('button[type="submit"]').disabled = !user;
+      $("boardText").placeholder = user ? "家族への伝言を入力..." : "投稿するにはログインしてください";
 
       renderCalendar();
       renderBoard();
@@ -753,6 +786,7 @@
       currentAuthUserId = authUser.id;
       updateUserUI();
       await loadSharedEvents();
+      await loadSharedBoardPosts();
     }
 
     $("loginBtn").addEventListener("click", async () => {
@@ -762,6 +796,7 @@
         currentUser = null;
         currentAuthUserId = null;
         sharedEvents = [];
+        sharedBoardPosts = [];
         updateUserUI();
       } else {
         $("loginEmail").value = "";
@@ -844,109 +879,94 @@
     $("closeAdminSettings").addEventListener("click", () => $("adminSettingsDialog").close());
     $("cancelAdminSettings").addEventListener("click", () => $("adminSettingsDialog").close());
 
-    // 掲示板投稿
-    $("boardForm").addEventListener("submit", (e) => {
+    // Supabase掲示板投稿（ログイン家族のみ）
+    $("boardForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-
-      const text = $("boardText").value.trim();
-      if (!text) return;
-
-      const user = currentUserInfo();
-      const author = user ? user.name : $("boardName").value.trim();
-      if (!author) {
-        alert("投稿者名を入力してください。");
+      if (!currentUser || !currentAuthUserId) {
+        alert("掲示板への投稿にはログインが必要です。");
         return;
       }
-
-      let password = null;
-      if (!currentUser) {
-        password = $("boardPass").value;
-        if (password.length < 4) {
-          alert("編集用パスワードを4文字以上で設定してください。");
-          return;
-        }
+      const text = $("boardText").value.trim();
+      if (!text) return;
+      const user = currentUserInfo();
+      const title = text.split(/\r?\n/)[0].slice(0, 100) || "家族掲示板";
+      const record = {
+        author_id: currentAuthUserId,
+        author_name: user.name,
+        author_color: user.color,
+        title,
+        content: text,
+        is_anonymous: false,
+        updated_at: new Date().toISOString()
+      };
+      const { data, error } = await supabaseClient
+        .from("board_posts")
+        .insert({ ...record, created_at: new Date().toISOString() })
+        .select("id, author_id, author_name, author_color, title, content, is_anonymous, created_at, updated_at")
+        .single();
+      if (error) {
+        alert("掲示板への投稿に失敗しました：" + error.message + "\nSupabaseのboard_postsの列名・RLS権限を確認してください。");
+        return;
       }
-
-      const posts = readStore(BOARD_KEY);
-      posts.push({
-        id:crypto.randomUUID(),
-        text,
-        author,
-        userId:currentUser,
-        password,
-        createdAt:Date.now()
-      });
-
-      writeStore(BOARD_KEY, posts);
+      sharedBoardPosts.unshift(boardPostFromRow(data));
       $("boardText").value = "";
-      $("boardPass").value = "";
       renderBoard();
     });
 
     function openBoardEdit(id) {
-      const post = readStore(BOARD_KEY).find(p => p.id === id);
+      const post = sharedBoardPosts.find(p => String(p.id) === String(id));
       if (!post || !canManageBoard(post)) {
         alert("この投稿を編集する権限がありません。");
         return;
       }
-
       editingBoardId = id;
       $("editBoardText").value = post.text;
-      const needsPass = !post.userId && currentUser !== "admin";
-      $("editBoardPassField").classList.toggle("hidden", !needsPass);
+      $("editBoardPassField").classList.add("hidden");
       $("editBoardPass").value = "";
       $("boardEditDialog").showModal();
     }
 
-    function deleteBoardPost(id) {
-      const posts = readStore(BOARD_KEY);
-      const post = posts.find(p => p.id === id);
-
+    async function deleteBoardPost(id) {
+      const post = sharedBoardPosts.find(p => String(p.id) === String(id));
       if (!post || !canManageBoard(post)) {
         alert("この投稿を削除する権限がありません。");
         return;
       }
-
-      if (!post.userId && currentUser !== "admin") {
-        const pass = prompt("投稿時に設定した編集用パスワードを入力してください。");
-        if (pass !== post.password) {
-          alert("パスワードが違います。");
-          return;
-        }
-      }
-
       if (!confirm("この掲示板投稿を削除しますか？")) return;
-      writeStore(BOARD_KEY, posts.filter(p => p.id !== id));
+      const { error } = await supabaseClient.from("board_posts").delete().eq("id", id);
+      if (error) {
+        alert("掲示板投稿の削除に失敗しました：" + error.message);
+        return;
+      }
+      sharedBoardPosts = sharedBoardPosts.filter(p => String(p.id) !== String(id));
       renderBoard();
     }
 
-    $("boardEditForm").addEventListener("submit", (e) => {
+    $("boardEditForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-
-      const posts = readStore(BOARD_KEY);
-      const post = posts.find(p => p.id === editingBoardId);
-
+      const post = sharedBoardPosts.find(p => String(p.id) === String(editingBoardId));
       if (!post || !canManageBoard(post)) {
         alert("この投稿を編集する権限がありません。");
         return;
       }
-
-      if (!post.userId && currentUser !== "admin") {
-        if ($("editBoardPass").value !== post.password) {
-          alert("編集用パスワードが違います。");
-          return;
-        }
-      }
-
       const newText = $("editBoardText").value.trim();
       if (!newText) {
         alert("投稿内容を入力してください。");
         return;
       }
-
-      post.text = newText;
-      post.updatedAt = Date.now();
-      writeStore(BOARD_KEY, posts);
+      const title = newText.split(/\r?\n/)[0].slice(0, 100) || "家族掲示板";
+      const { data, error } = await supabaseClient
+        .from("board_posts")
+        .update({ title, content: newText, updated_at: new Date().toISOString() })
+        .eq("id", editingBoardId)
+        .select("id, author_id, author_name, author_color, title, content, is_anonymous, created_at, updated_at")
+        .single();
+      if (error) {
+        alert("掲示板投稿の編集に失敗しました：" + error.message);
+        return;
+      }
+      const updated = boardPostFromRow(data);
+      sharedBoardPosts = sharedBoardPosts.map(p => String(p.id) === String(updated.id) ? updated : p);
       $("boardEditDialog").close();
       renderBoard();
     });
